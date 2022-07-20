@@ -1,43 +1,63 @@
 import java.io.*;
 import java.net.http.HttpClient;
+import java.net.http.HttpResponse;
 
 public class App {
 
-    private static String apiKey;
+    private static final String apiKey;
+    private static final HttpClient client = HttpClient.newHttpClient();
+    private static final Writer out = new PrintWriter(System.out);
 
-    private static String getApiKey() throws IOException {
-        if (apiKey == null) {
+    static {
+        String tmp;
+        try {
             var filename = "./src/.env";
             var reader = new BufferedReader(new FileReader(filename));
-            apiKey = reader.readLine();
+            tmp = reader.readLine();
             reader.close();
+        } catch (IOException ioe) {
+            tmp = "";
         }
-        return apiKey;
+        apiKey = tmp;
+    }
+
+    private static HttpResponse<String> get(String endpoint, String secondUrl) throws IOException, InterruptedException {
+        var url = "https://imdb-api.com/en/API/" + endpoint + "/" + apiKey;
+        return new ResponseGetter(client, out)
+                .getFrom(url)
+                .ifNot(200)
+                .getFrom(secondUrl)
+                .getResponse();
+    }
+
+    private static HttpResponse<String> getTop250Movies() throws IOException, InterruptedException {
+        return get("Top250Movies", "https://alura-filmes.herokuapp.com/conteudos");
+    }
+
+    private static HttpResponse<String> getMostPopularMovies() throws IOException, InterruptedException {
+        return get("MostPopularMovies", "https://alura-filmes.herokuapp.com/conteudos");
+    }
+
+    private static HttpResponse<String> getTop250TVs() throws IOException, InterruptedException {
+        return get("Top250TVs", "https://alura-filmes.herokuapp.com/conteudos");
+    }
+
+    private static HttpResponse<String> getMostPopularTVs() throws IOException, InterruptedException {
+        return get("MostPopularTVs", "https://alura-filmes.herokuapp.com/conteudos");
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        String apiKey;
-        try {
-            apiKey = getApiKey();
-        } catch (IOException ioe) {
-            apiKey = "";
-        }
-
-        var url = "https://imdb-api.com/en/API/Top250Movies/" + apiKey;
-        var client = HttpClient.newHttpClient();
-        var out = new BufferedWriter(new PrintWriter(System.out));
-        var body = new ResponseGetter(client, out)
-                .getFrom(url)
-                .ifNot(200)
-                .getFrom("https://api.mocki.io/v2/549a5d8b")
-                .getResponse()
-                .body();
-
         var parser = new JsonParser();
-        var movies = parser.parse(body);
 
+        var response = getTop250Movies();
+        var movies = parser.parse(response.body());
+
+        System.out.println("\nTop 250 Movies:");
         for (var movie : movies) {
-            System.out.println(movie);
+            System.out.println("   " + movie.get("title"));
+            System.out.println("   " + movie.get("image"));
+            System.out.println("   " + movie.get("imDbRating"));
+            System.out.println();
         }
     }
 }

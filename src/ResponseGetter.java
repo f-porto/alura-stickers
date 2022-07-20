@@ -21,33 +21,26 @@ public class ResponseGetter {
     public ResponseGetter getFrom(String url) throws IOException, InterruptedException {
         if (successful) {
             writer.write("Skipping: " + url + "\n");
-            writer.flush();
-            return this;
+        } else {
+            writer.write("Trying: " + url + "\n");
+
+            var uri = URI.create(url);
+            var request = HttpRequest.newBuilder()
+                    .uri(uri)
+                    .GET()
+                    .build();
+            response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            writer.write("Status Code: " + response.statusCode() + "\n");
         }
 
-        writer.write("Trying: " + url + "\n");
         writer.flush();
-
-        var uri = URI.create(url);
-        var request = HttpRequest.newBuilder()
-                .uri(uri)
-                .GET()
-                .build();
-        response = client.send(request, HttpResponse.BodyHandlers.ofString());
         return this;
     }
 
-    public ResponseGetter ifNot(int statusCode) throws IOException {
-        if (!successful) {
+    public ResponseGetter ifNot(int statusCode) {
+        if (!successful)
             successful = response.statusCode() == statusCode;
-            if (successful)
-                writer.write("Got: " + response.statusCode() + "\n");
-            else
-                writer.write("Failed with: " + response.statusCode() + "\n");
-        } else {
-            writer.write("Already had success before\n");
-        }
-        writer.flush();
         return this;
     }
 
