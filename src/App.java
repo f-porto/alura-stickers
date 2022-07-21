@@ -1,6 +1,8 @@
 import java.io.*;
+import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
+import java.util.Map;
 
 public class App {
 
@@ -47,17 +49,37 @@ public class App {
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
+        // TODO: Permitir que o usuário avalie o filme de alguma forma
+
+        // TODO: Substituir por uma biblioteca especializada para arquivos JSON
         var parser = new JsonParser();
 
         var response = getTop250Movies();
         var movies = parser.parse(response.body());
 
-        System.out.println("\nTop 250 Movies:");
-        for (var movie : movies) {
-            System.out.println("   " + movie.get("title"));
-            System.out.println("   " + movie.get("image"));
-            System.out.println("   " + movie.get("imDbRating"));
-            System.out.println();
+        var stickerMaker = new StickerMaker();
+
+        var limit = 5;
+        for (var i = 0; i < limit && i < movies.size(); i++) {
+            var movie = movies.get(i);
+
+            // TODO: Tentar pegar uma imagem maior (trocar as dimensões pela url ou pegar os poster pela API do IMDB)
+            var url = movie.get("image");
+            var title = movie.get("title");
+            var stream = new URL(url).openStream();
+
+            // TODO: Texto deve ser personalizável
+            stickerMaker.make(stream, "TOPZERA", "./image/" + movie.get("id") + ".png");
+
+            System.out.println(title);
         }
+    }
+
+    // TODO: Melhorar a saída (deixar mais bonitinha)
+    private static void printMovie(Map<String, String> movie) {
+        System.out.println("   " + movie.get("title"));
+        System.out.println("   " + movie.get("image"));
+        System.out.println("   " + movie.get("imDbRating"));
+        System.out.println();
     }
 }
