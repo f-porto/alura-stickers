@@ -1,16 +1,16 @@
 import java.io.*;
 import java.net.URL;
 import java.net.http.HttpClient;
-import java.net.http.HttpResponse;
 import java.util.Map;
 
 public class App {
 
-    private static final String apiKey;
-    private static final HttpClient client = HttpClient.newHttpClient();
-    private static final Writer out = new PrintWriter(System.out);
+    private static final String API_KEY;
+    private static final String IMDB_API = "https://imdb-api.com/en/API";
+    private static final String MOCK_API = "https://api.mocki.io/v2/549a5d8b";
 
     static {
+        // TODO: checar a biblioteca `dotenv-java` (https://github.com/cdimascio/dotenv-java)
         String tmp;
         try {
             var filename = "./src/.env";
@@ -20,32 +20,7 @@ public class App {
         } catch (IOException ioe) {
             tmp = "";
         }
-        apiKey = tmp;
-    }
-
-    private static HttpResponse<String> get(String endpoint, String secondUrl) throws IOException, InterruptedException {
-        var url = "https://imdb-api.com/en/API/" + endpoint + "/" + apiKey;
-        return new ResponseGetter(client, out)
-                .getFrom(url)
-                .ifNot(200)
-                .getFrom(secondUrl)
-                .getResponse();
-    }
-
-    private static HttpResponse<String> getTop250Movies() throws IOException, InterruptedException {
-        return get("Top250Movies", "https://alura-filmes.herokuapp.com/conteudos");
-    }
-
-    private static HttpResponse<String> getMostPopularMovies() throws IOException, InterruptedException {
-        return get("MostPopularMovies", "https://alura-filmes.herokuapp.com/conteudos");
-    }
-
-    private static HttpResponse<String> getTop250TVs() throws IOException, InterruptedException {
-        return get("Top250TVs", "https://alura-filmes.herokuapp.com/conteudos");
-    }
-
-    private static HttpResponse<String> getMostPopularTVs() throws IOException, InterruptedException {
-        return get("MostPopularTVs", "https://alura-filmes.herokuapp.com/conteudos");
+        API_KEY = tmp;
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
@@ -53,26 +28,49 @@ public class App {
 
         // TODO: Substituir por uma biblioteca especializada para arquivos JSON
         var parser = new JsonParser();
-
-        var response = getTop250Movies();
-        var movies = parser.parse(response.body());
-
         var stickerMaker = new StickerMaker();
 
-        var limit = 5;
-        for (var i = 0; i < limit && i < movies.size(); i++) {
-            var movie = movies.get(i);
+        // TODO: Talvez usar Factories ou Anounymous Classes
+        var iMDBRequester = APIRequester.newBuilder(IMDBRequester.class)
+                .api(IMDB_API)
+                .apiKey(API_KEY)
+                .build();
+        var mockRequester = APIRequester.newBuilder(MockRequester.class)
+                .api(MOCK_API)
+                .build();
 
-            // TODO: Tentar pegar uma imagem maior (trocar as dimensões pela url ou pegar os poster pela API do IMDB)
-            var url = movie.get("image");
-            var title = movie.get("title");
-            var stream = new URL(url).openStream();
+        System.out.println("Trying iMDB API");
+        var response = iMDBRequester.get("Top250Movies");
+        System.out.println("Status Code: " + response.statusCode());
 
-            // TODO: Texto deve ser personalizável
-            stickerMaker.make(stream, "TOPZERA", "./image/" + movie.get("id") + ".png");
-
-            System.out.println(title);
+        if (response.statusCode() != 200) {
+            System.out.println("Trying Mock API");
+            response = mockRequester.get("Top250Movies");
+            System.out.println("Status Code: " + response.statusCode());
         }
+        System.out.println();
+
+        // TODO: checar o pacote `streamex` (https://github.com/amaembo/streamex)
+        parser.parse(response.body())
+                .stream()
+                .limit(5)
+                .forEach(movie -> {
+                    // TODO: Tentar pegar uma imagem maior (trocar as dimensões pela url ou pegar os poster pela API do IMDB
+                    var url = movie.get("image");
+                    var id = movie.get("id");
+                    var title = movie.get("title");
+
+                    System.out.println(title);
+
+                    try {
+                        var stream = new URL(url).openStream();
+                        // TODO: Texto deve ser personalizável
+                        stickerMaker.make(stream, "TOPZERA", "./image/" + id + ".png");
+                    } catch (IOException ioe) {
+                        // TODO: Criar uma Exception para embrulhar essa Exception
+                        throw new RuntimeException(ioe);
+                    }
+                });
     }
 
     // TODO: Melhorar a saída (deixar mais bonitinha)
