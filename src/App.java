@@ -1,76 +1,116 @@
 import java.io.*;
 import java.net.URL;
-import java.net.http.HttpClient;
+import java.net.http.HttpResponse;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 public class App {
 
-    private static final String API_KEY;
+    private static final String IMDB_API_KEY;
+    private static final String NASA_API_KEY;
+    // TODO: Procurar por mais API's
     private static final String IMDB_API = "https://imdb-api.com/en/API";
-    private static final String MOCK_API = "https://api.mocki.io/v2/549a5d8b";
+    private static final String NASA_API = "https://api.nasa.gov/planetary";
 
     static {
         // TODO: checar a biblioteca `dotenv-java` (https://github.com/cdimascio/dotenv-java)
-        String tmp;
+        String iMDBTmp = null;
+        String nasaTmp = null;
         try {
             var filename = "./src/.env";
             var reader = new BufferedReader(new FileReader(filename));
-            tmp = reader.readLine();
+            iMDBTmp = reader.readLine();
+            nasaTmp = reader.readLine();
             reader.close();
         } catch (IOException ioe) {
-            tmp = "";
+            if (iMDBTmp == null) {
+                iMDBTmp = "";
+            }
+            if (nasaTmp == null) {
+                nasaTmp = "";
+            }
         }
-        API_KEY = tmp;
+        IMDB_API_KEY = iMDBTmp;
+        NASA_API_KEY = nasaTmp;
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
         // TODO: Permitir que o usuário avalie o filme de alguma forma
 
-        // TODO: Substituir por uma biblioteca especializada para arquivos JSON
-        var parser = new JsonParser();
         var stickerMaker = new StickerMaker();
 
-        // TODO: Talvez usar Factories ou Anounymous Classes
-        var iMDBRequester = APIRequester.newBuilder(IMDBRequester.class)
-                .api(IMDB_API)
-                .apiKey(API_KEY)
-                .build();
-        var mockRequester = APIRequester.newBuilder(MockRequester.class)
-                .api(MOCK_API)
-                .build();
+        var imdbRequester = new APIRequester("{0}/{2}/{1}", IMDB_API, IMDB_API_KEY);
+        var nasaRequester = new APIRequester("{0}/{2}?api_key={1}", NASA_API, NASA_API_KEY);
 
-        System.out.println("Trying iMDB API");
-        var response = iMDBRequester.get("Top250Movies");
-        System.out.println("Status Code: " + response.statusCode());
+        var imdbResponse = getResponse(imdbRequester, "Top250Movies");
+        var nasaResponse = getResponse(nasaRequester, "apod");
 
-        if (response.statusCode() != 200) {
-            System.out.println("Trying Mock API");
-            response = mockRequester.get("Top250Movies");
-            System.out.println("Status Code: " + response.statusCode());
-        }
-        System.out.println();
+        var imdbExtractor = new ContentExtractor() {
+            @Override
+            public String keyMapper(ContentKey from) {
+                return switch (from) {
+                    case TITLE -> "title";
+                    case URL_IMAGE -> "image";
+                };
+            }
+        };
 
-        // TODO: checar o pacote `streamex` (https://github.com/amaembo/streamex)
-        parser.parse(response.body())
-                .stream()
+        var nasaExtractor = new ContentExtractor() {
+            @Override
+            public String keyMapper(ContentKey from) {
+                return switch (from) {
+                    case TITLE -> "title";
+                    case URL_IMAGE -> "url";
+                };
+            }
+        };
+
+        var pattern = Pattern.compile("\\W+");
+        imdbExtractor.extractContent(imdbResponse.body())
                 .limit(5)
-                .forEach(movie -> {
-                    // TODO: Tentar pegar uma imagem maior (trocar as dimensões pela url ou pegar os poster pela API do IMDB
-                    var url = movie.get("image");
-                    var id = movie.get("id");
-                    var title = movie.get("title");
+                .forEach(content -> {
+                    System.out.println(content.title());
 
-                    System.out.println(title);
+                    var url = content.urlImage();
+                    var title = pattern.matcher(content.title())
+                            .replaceAll("");
 
                     try {
                         var stream = new URL(url).openStream();
                         // TODO: Texto deve ser personalizável
-                        stickerMaker.make(stream, "TOPZERA", "./image/" + id + ".png");
+                        stickerMaker.make(stream, "TOPZERA", "./image/" + title + ".png");
                     } catch (IOException ioe) {
                         // TODO: Criar uma Exception para embrulhar essa Exception
                         throw new RuntimeException(ioe);
                     }
                 });
+
+        nasaExtractor.extractContent(nasaResponse.body())
+                .limit(5)
+                .forEach(content -> {
+                    System.out.println(content.title());
+
+                    var url = content.urlImage();
+                    var title = pattern.matcher(content.title())
+                            .replaceAll("");
+
+                    try {
+                        var stream = new URL(url).openStream();
+                        // TODO: Texto deve ser personalizável
+                        stickerMaker.make(stream, "TOPZERA", "./image/" + title + ".png");
+                    } catch (IOException ioe) {
+                        // TODO: Criar uma Exception para embrulhar essa Exception
+                        throw new RuntimeException(ioe);
+                    }
+                });
+    }
+
+    private static HttpResponse<String> getResponse(APIRequester requester, String endpoint) throws IOException, InterruptedException {
+        System.out.println("Trying API");
+        var response = requester.get(endpoint);
+        System.out.println("Status Code: " + response.statusCode());
+        System.out.println();
+        return response;
     }
 
     // TODO: Melhorar a saída (deixar mais bonitinha)

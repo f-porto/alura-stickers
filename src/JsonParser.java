@@ -16,7 +16,21 @@ public class JsonParser {
         Matcher matcher = REGEX_ITEMS.matcher(json);
         if (!matcher.find()) {
 
-            throw new IllegalArgumentException("Não encontrou items.");
+            Map<String, String> atributosItem = new HashMap<>();
+
+            Matcher matcherAtributosJson = REGEX_ATRIBUTOS_JSON.matcher(json);
+            if (!matcherAtributosJson.find()) {
+
+                throw new IllegalArgumentException("Não encontrou items.");
+            }
+
+            while (matcherAtributosJson.find()) {
+                String atributo = matcherAtributosJson.group(1);
+                String valor = matcherAtributosJson.group(2);
+                atributosItem.put(atributo, valor);
+            }
+
+            return List.of(atributosItem);
         }
 
         String[] items = matcher.group(1).split("\\},\\{");
